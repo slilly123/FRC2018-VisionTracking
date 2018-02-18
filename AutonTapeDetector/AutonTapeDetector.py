@@ -4,11 +4,11 @@ import numpy as np
 
 #May work best if use GRIP with camera at image in given lighting conditions to get ranges
 #works at home
-lowerBound=np.array([32,0,165])
-upperBound=np.array([124,255,255])
+#lowerBound=np.array([32,0,165])
+#upperBound=np.array([124,255,255])
 #tighten the color range - works at school
-#lowerBound=np.array([71,48,227])
-#upperBound=np.array([98,255,255])
+lowerBound=np.array([71,48,227])
+upperBound=np.array([98,255,255])
 
 kernelOpen=np.ones((5,5))
 kernelClose=np.ones((20,20))
@@ -17,16 +17,19 @@ interpolation = cv2.INTER_AREA
 # Calibration distance
 # Focal Length = (measured pixels * known distance)/known width of tape
 # Focal Length = (60 * 24 in)/2 in = 720
-focalLength= 720
+focalLength = 720
 #Distance calculation
 # distance (inches) = (focal length * known width) / pixel width
 
 # Calibration angle
-# resolution (640x480), camera FOV (65 deg), use linear interpolation
-# FOV/sqrt(640^2 + 480^2)
-# Each pixel represents 65/800 = .08125 deg
-angleConversion=0.08125
-# Distance from center (pixels) * angleConversion
+# resolution (640x480), camera FOV (65 deg)
+# Pixel/angle ratio in horizontal = 640 pixels/65 degrees = 9.846
+pixelToDeg = 9.846
+centerHorizonPixels = 320
+# Want target to be in center of FOV or at 320 pixels
+# Subtract x returned from cv2.boundingRect from 320 to compute pixels to turn
+# Change pixels to turn to degrees with proportions
+# degreesToTarget = (centerHorizonPixels - x)/pixelToDeg
 
 class AutonTapeDetector:
     # ###################################################################################################
@@ -69,14 +72,15 @@ class AutonTapeDetector:
 
             # check contour verticies for rectangle, ideally there will be 4 but may be more at a distance
             if len(approx) <= 6:
-               x,y,w,h=cv2.boundingRect(conts[i])
-               # compare aspect ratio
-               if ((w/h) < .25 and (w/h) > .1):
-                  cv2.rectangle(inimg,(x,y),(x+w,y+h),(0,0,255), 2)
-                  targetCenterX = x + (w / 2)
-                  targetCenterY = y + (h / 2)
-                  distanceToTarget = (focalLength * 2)/w
-                  jevois.sendSerial("Target # {} w {} distance (inches) {}".format(i, w, distanceToTarget))
+                x,y,w,h=cv2.boundingRect(conts[i])
+                # compare aspect ratio (tape has destince aspect ratio due to large length compared to width)
+                if ((w/h) < .25 and (w/h) > .1):
+                    cv2.rectangle(inimg,(x,y),(x+w,y+h),(0,0,255), 2)
+                    targetCenterX = x + (w / 2)
+                    targetCenterY = y - (h / 2)
+                    distanceToTarget = (focalLength * 2)/w
+                    degreesToTarget = (centerHorizonPixels - x)/pixelToDeg
+                    jevois.sendSerial("Target # {} w {} distance {} angle {}".format(i, w, distanceToTarget, degreesToTarget))
                    
         # Write frames/s info from our timer into the edge map
         fps = self.timer.stop()
